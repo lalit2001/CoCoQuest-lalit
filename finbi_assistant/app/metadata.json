@@ -1,0 +1,656 @@
+{
+  "database": "FINBI_DEMO",
+  "schema": "CORE",
+  "currency": "INR",
+  "date_range": "2026-01-01 to 2026-08-15",
+  "conventions": [
+    "All monetary columns are in INR.",
+    "REFUND transactions carry a NEGATIVE gross_amount, total_charged and net_amount, so SUM(net_amount) is already true net revenue - never filter refunds out unless asked.",
+    "FAILED transactions have fee = 0, net_amount = 0 and settlement_date IS NULL.",
+    "Only transactions with status = 'SETTLED' roll up into SETTLEMENTS and the LEDGER."
+  ],
+  "tables": [
+    {
+      "name": "TRANSACTIONS",
+      "grain": "One row per card transaction captured at a terminal.",
+      "description": "Card payment transactions for a small merchant across three acquiring providers and five terminals. Covers sales and refunds, the fee charged by the acquirer, and whether the money has been settled yet. This is the primary revenue table.",
+      "row_count": 350,
+      "columns": [
+        {
+          "name": "transaction_id",
+          "type": "VARCHAR",
+          "description": "Primary key, e.g. TXN000123."
+        },
+        {
+          "name": "direction",
+          "type": "VARCHAR",
+          "description": "'SALE' or 'REFUND'. REFUND rows have negative amounts."
+        },
+        {
+          "name": "txn_datetime",
+          "type": "TIMESTAMP_NTZ",
+          "description": "When the card was tapped/swiped."
+        },
+        {
+          "name": "value_date",
+          "type": "DATE",
+          "description": "Calendar date of the transaction. Use this for daily/monthly grouping."
+        },
+        {
+          "name": "provider",
+          "type": "VARCHAR",
+          "description": "Acquiring provider: RAZORPAY, PINELABS or PAYTM."
+        },
+        {
+          "name": "terminal_id",
+          "type": "VARCHAR",
+          "description": "Card machine that captured the payment. Joins to CARD_MACHINE_ACCOUNTS.terminal_id."
+        },
+        {
+          "name": "merchant_id",
+          "type": "VARCHAR",
+          "description": "Merchant account the terminal belongs to."
+        },
+        {
+          "name": "card_type",
+          "type": "VARCHAR",
+          "description": "Card network: VISA, MASTERCARD or RUPAY."
+        },
+        {
+          "name": "card_last4",
+          "type": "VARCHAR",
+          "description": "Last four digits of the card."
+        },
+        {
+          "name": "auth_code",
+          "type": "VARCHAR",
+          "description": "Issuer authorisation code."
+        },
+        {
+          "name": "category",
+          "type": "VARCHAR",
+          "description": "Sales category: DINE_IN, TAKEAWAY, DELIVERY, MERCHANDISE or CATERING."
+        },
+        {
+          "name": "gross_amount",
+          "type": "NUMBER",
+          "description": "Bill amount before tip. Negative for refunds."
+        },
+        {
+          "name": "tip",
+          "type": "NUMBER",
+          "description": "Tip added at the terminal. Only ever non-zero for DINE_IN sales."
+        },
+        {
+          "name": "total_charged",
+          "type": "NUMBER",
+          "description": "gross_amount + tip. The amount actually charged to the card."
+        },
+        {
+          "name": "fee",
+          "type": "NUMBER",
+          "description": "Acquirer processing fee, always positive, 0 when the transaction FAILED. This is a cost to the merchant."
+        },
+        {
+          "name": "net_amount",
+          "type": "NUMBER",
+          "description": "total_charged - fee. The merchant's net receipt. SUM this for net revenue."
+        },
+        {
+          "name": "currency",
+          "type": "VARCHAR",
+          "description": "Always 'INR'."
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR",
+          "description": "'SETTLED', 'PENDING' or 'FAILED'."
+        },
+        {
+          "name": "settlement_date",
+          "type": "DATE",
+          "description": "Date the payout batch landed. NULL unless status = 'SETTLED'."
+        },
+        {
+          "name": "notes",
+          "type": "VARCHAR",
+          "description": "Free-text note; populated for failed, pending and refund rows."
+        }
+      ],
+      "relationships": [
+        "TRANSACTIONS.transaction_id <- DISPUTES.orig_txn_id (a dispute is raised against one transaction)",
+        "TRANSACTIONS.terminal_id -> CARD_MACHINE_ACCOUNTS.terminal_id",
+        "TRANSACTIONS.provider + card_type -> FEE_SCHEDULE.provider + card_type",
+        "TRANSACTIONS.transaction_id -> LEDGER.source_id where LEDGER.source_type = 'TRANSACTION'"
+      ],
+      "common_metrics": [
+        "net revenue = SUM(net_amount)",
+        "gross sales = SUM(total_charged) WHERE direction = 'SALE'",
+        "total fees paid = SUM(fee)",
+        "effective fee rate = SUM(fee) / SUM(ABS(total_charged))",
+        "failure rate = COUNT_IF(status = 'FAILED') / COUNT(*)",
+        "refund rate = SUM(ABS(total_charged)) FILTER on direction='REFUND' / SUM(total_charged) FILTER on direction='SALE'",
+        "average ticket size = AVG(total_charged) WHERE direction = 'SALE'"
+      ],
+      "example_questions": [
+        "What is our net revenue by provider this year?",
+        "Which sales category brings in the most money?",
+        "How much have we paid in card processing fees per month?",
+        "What is our transaction failure rate by terminal?"
+      ],
+      "aliases": [
+        "revenue",
+        "sales",
+        "income",
+        "turnover",
+        "takings",
+        "earnings",
+        "money in",
+        "card payments",
+        "transactions",
+        "payments",
+        "tickets",
+        "orders",
+        "fees paid",
+        "processing fees",
+        "refunds",
+        "failed payments",
+        "declines",
+        "average ticket",
+        "top line",
+        "how much did we make"
+      ]
+    },
+    {
+      "name": "DISPUTES",
+      "grain": "One row per cardholder dispute (chargeback) raised against a transaction.",
+      "description": "Chargebacks and disputes raised by cardholders. Tracks why the dispute was raised, the deadline to respond, whether the merchant submitted evidence, the outcome, and how much money was clawed back or recovered. Use this for chargeback performance, win rates and dispute losses.",
+      "row_count": 47,
+      "columns": [
+        {
+          "name": "dispute_id",
+          "type": "VARCHAR",
+          "description": "Primary key, e.g. DSP00012."
+        },
+        {
+          "name": "orig_txn_id",
+          "type": "VARCHAR",
+          "description": "Foreign key to TRANSACTIONS.transaction_id - the disputed transaction."
+        },
+        {
+          "name": "date_raised",
+          "type": "DATE",
+          "description": "Date the cardholder raised the dispute. Use this for time grouping."
+        },
+        {
+          "name": "response_deadline",
+          "type": "DATE",
+          "description": "Date by which the merchant must submit evidence (date_raised + 14 days)."
+        },
+        {
+          "name": "date_resolved",
+          "type": "DATE",
+          "description": "Date the dispute was decided. NULL while outcome = 'PENDING'."
+        },
+        {
+          "name": "provider",
+          "type": "VARCHAR",
+          "description": "Acquiring provider handling the dispute."
+        },
+        {
+          "name": "terminal_id",
+          "type": "VARCHAR",
+          "description": "Terminal where the disputed transaction happened."
+        },
+        {
+          "name": "merchant_id",
+          "type": "VARCHAR",
+          "description": "Merchant account."
+        },
+        {
+          "name": "card_type",
+          "type": "VARCHAR",
+          "description": "Card network of the disputed transaction."
+        },
+        {
+          "name": "card_last4",
+          "type": "VARCHAR",
+          "description": "Last four digits of the disputed card."
+        },
+        {
+          "name": "dispute_reason",
+          "type": "VARCHAR",
+          "description": "One of FRAUD_UNAUTHORISED, PRODUCT_NOT_RECEIVED, DUPLICATE_CHARGE, INCORRECT_AMOUNT, SERVICE_QUALITY."
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "description": "Narrative of the cardholder's claim."
+        },
+        {
+          "name": "disputed_amount",
+          "type": "NUMBER",
+          "description": "Amount under dispute, equal to the original transaction's total_charged."
+        },
+        {
+          "name": "chargeback_fee",
+          "type": "NUMBER",
+          "description": "Flat fee the provider charges per chargeback, from FEE_SCHEDULE."
+        },
+        {
+          "name": "outcome",
+          "type": "VARCHAR",
+          "description": "'WON' (merchant kept the money), 'LOST' (cardholder kept the money) or 'PENDING'."
+        },
+        {
+          "name": "evidence_provided",
+          "type": "BOOLEAN",
+          "description": "TRUE if the merchant submitted supporting evidence. Strongly correlated with winning."
+        },
+        {
+          "name": "cb_debited",
+          "type": "BOOLEAN",
+          "description": "TRUE if the provider has already debited the disputed amount."
+        },
+        {
+          "name": "amount_recovered",
+          "type": "NUMBER",
+          "description": "Amount returned to the merchant; equals disputed_amount when outcome = 'WON', otherwise 0."
+        },
+        {
+          "name": "notes",
+          "type": "VARCHAR",
+          "description": "Resolution note."
+        }
+      ],
+      "relationships": [
+        "DISPUTES.orig_txn_id -> TRANSACTIONS.transaction_id",
+        "DISPUTES.dispute_id -> LEDGER.source_id where LEDGER.source_type = 'DISPUTE'",
+        "DISPUTES.provider + card_type -> FEE_SCHEDULE.provider + card_type"
+      ],
+      "common_metrics": [
+        "dispute win rate = COUNT_IF(outcome = 'WON') / COUNT_IF(outcome <> 'PENDING')",
+        "net chargeback loss = SUM(disputed_amount - amount_recovered)",
+        "total chargeback fees = SUM(chargeback_fee)",
+        "open disputes = COUNT_IF(outcome = 'PENDING')",
+        "overdue disputes = COUNT_IF(outcome = 'PENDING' AND response_deadline < CURRENT_DATE())",
+        "days to resolve = AVG(DATEDIFF('day', date_raised, date_resolved))",
+        "dispute rate = COUNT(*) / (SELECT COUNT(*) FROM TRANSACTIONS)"
+      ],
+      "example_questions": [
+        "Which disputes are we most likely to lose?",
+        "What is our chargeback win rate by provider?",
+        "How much have we lost to chargebacks this year?",
+        "Does providing evidence actually improve our win rate?"
+      ],
+      "aliases": [
+        "disputes",
+        "chargebacks",
+        "cb",
+        "claims",
+        "fraud",
+        "win rate",
+        "loss rate",
+        "represented",
+        "evidence",
+        "clawback",
+        "reversals",
+        "cardholder complaints",
+        "losing disputes",
+        "open cases"
+      ]
+    },
+    {
+      "name": "SETTLEMENTS",
+      "grain": "One row per payout batch (provider + terminal + settlement_date).",
+      "description": "Money actually paid out to the merchant's bank account. Each row aggregates all settled transactions for one terminal on one settlement date. Use this for payout reliability, pending payouts and cash-in timing.",
+      "row_count": 276,
+      "columns": [
+        {
+          "name": "settlement_id",
+          "type": "VARCHAR",
+          "description": "Primary key, e.g. STL00042."
+        },
+        {
+          "name": "provider",
+          "type": "VARCHAR",
+          "description": "Provider making the payout."
+        },
+        {
+          "name": "terminal_id",
+          "type": "VARCHAR",
+          "description": "Terminal whose takings are in this batch."
+        },
+        {
+          "name": "merchant_id",
+          "type": "VARCHAR",
+          "description": "Merchant account receiving the payout."
+        },
+        {
+          "name": "settlement_date",
+          "type": "DATE",
+          "description": "Date the batch was paid out. Use this for time grouping."
+        },
+        {
+          "name": "batch_txn_count",
+          "type": "NUMBER",
+          "description": "Number of transactions in the batch."
+        },
+        {
+          "name": "gross_amount",
+          "type": "NUMBER",
+          "description": "Sum of total_charged for the batch."
+        },
+        {
+          "name": "total_fees",
+          "type": "NUMBER",
+          "description": "Sum of acquirer fees deducted from the batch."
+        },
+        {
+          "name": "net_settled_amount",
+          "type": "NUMBER",
+          "description": "gross_amount - total_fees. What actually hit the bank."
+        },
+        {
+          "name": "bank_account",
+          "type": "VARCHAR",
+          "description": "Masked destination bank account."
+        },
+        {
+          "name": "payout_reference",
+          "type": "VARCHAR",
+          "description": "Provider's payout reference string."
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR",
+          "description": "'PAID' or 'PENDING'. PENDING means the payout has not landed yet."
+        }
+      ],
+      "relationships": [
+        "SETTLEMENTS is derived from TRANSACTIONS WHERE status = 'SETTLED', grouped by provider, terminal_id, merchant_id, settlement_date",
+        "SETTLEMENTS.terminal_id -> CARD_MACHINE_ACCOUNTS.terminal_id",
+        "SETTLEMENTS.settlement_id -> LEDGER.source_id where LEDGER.source_type = 'SETTLEMENT'"
+      ],
+      "common_metrics": [
+        "total settled = SUM(net_settled_amount)",
+        "pending payout value = SUM(net_settled_amount) WHERE status = 'PENDING'",
+        "pending payout count = COUNT_IF(status = 'PENDING')",
+        "average batch size = AVG(batch_txn_count)",
+        "fee drag per batch = SUM(total_fees) / SUM(gross_amount)",
+        "settlement reliability = COUNT_IF(status = 'PAID') / COUNT(*)"
+      ],
+      "example_questions": [
+        "Which settlement batches are still pending?",
+        "How much is owed to us in unpaid payouts?",
+        "What is the average payout size by provider?",
+        "Show settled amount per month."
+      ],
+      "aliases": [
+        "settlements",
+        "payouts",
+        "payout batches",
+        "money received",
+        "cash in",
+        "deposits",
+        "bank transfers",
+        "pending payouts",
+        "unpaid",
+        "owed to us",
+        "settlement reliability",
+        "batches"
+      ]
+    },
+    {
+      "name": "LEDGER",
+      "grain": "One row per debit-or-credit posting.",
+      "description": "Simplified double-entry general ledger derived from transactions, disputes and settlements. Total debits equal total credits. Use this to trace the accounting impact of any business event, and to chart account balances over time.",
+      "row_count": 1612,
+      "columns": [
+        {
+          "name": "ledger_entry_id",
+          "type": "VARCHAR",
+          "description": "Primary key, e.g. GL0000123."
+        },
+        {
+          "name": "entry_date",
+          "type": "DATE",
+          "description": "Posting date. Use this for time grouping."
+        },
+        {
+          "name": "account_code",
+          "type": "VARCHAR",
+          "description": "Account code: '1010' Bank Account, '1200' Card Receivable, '4000' Sales Revenue, '5100' Card Processing Fees, '5200' Chargeback Losses."
+        },
+        {
+          "name": "account_name",
+          "type": "VARCHAR",
+          "description": "Human-readable account name matching account_code."
+        },
+        {
+          "name": "debit",
+          "type": "NUMBER",
+          "description": "Debit amount, 0 if this posting is a credit."
+        },
+        {
+          "name": "credit",
+          "type": "NUMBER",
+          "description": "Credit amount, 0 if this posting is a debit."
+        },
+        {
+          "name": "source_type",
+          "type": "VARCHAR",
+          "description": "What generated the posting: 'TRANSACTION', 'DISPUTE' or 'SETTLEMENT'."
+        },
+        {
+          "name": "source_id",
+          "type": "VARCHAR",
+          "description": "The id of the originating row. Join to TRANSACTIONS.transaction_id, DISPUTES.dispute_id or SETTLEMENTS.settlement_id depending on source_type."
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR",
+          "description": "Narrative for the posting."
+        },
+        {
+          "name": "running_balance",
+          "type": "NUMBER",
+          "description": "Cumulative (debit - credit) FOR THAT ACCOUNT ordered by entry_date. To chart a balance trend you MUST filter to a single account_code, e.g. WHERE account_code = '1010'."
+        }
+      ],
+      "relationships": [
+        "LEDGER.source_id -> TRANSACTIONS.transaction_id when source_type = 'TRANSACTION'",
+        "LEDGER.source_id -> DISPUTES.dispute_id when source_type = 'DISPUTE'",
+        "LEDGER.source_id -> SETTLEMENTS.settlement_id when source_type = 'SETTLEMENT'"
+      ],
+      "common_metrics": [
+        "bank balance trend = SELECT entry_date, MAX(running_balance) FROM LEDGER WHERE account_code = '1010' GROUP BY entry_date ORDER BY entry_date",
+        "total processing fee expense = SUM(debit) WHERE account_code = '5100'",
+        "total chargeback loss expense = SUM(debit) WHERE account_code = '5200'",
+        "revenue recognised = SUM(credit) - SUM(debit) WHERE account_code = '4000'",
+        "outstanding receivable = SUM(debit) - SUM(credit) WHERE account_code = '1200'",
+        "ledger is balanced when SUM(debit) = SUM(credit)"
+      ],
+      "example_questions": [
+        "Show me the bank account balance trend since April.",
+        "What was the ledger impact of disputes lost in May?",
+        "How much sits in card receivable right now?",
+        "Break down our expense accounts by month."
+      ],
+      "aliases": [
+        "ledger",
+        "general ledger",
+        "gl",
+        "accounts",
+        "bookkeeping",
+        "journal",
+        "postings",
+        "debits",
+        "credits",
+        "balance",
+        "running balance",
+        "account balance",
+        "trial balance",
+        "expense accounts",
+        "receivable",
+        "books",
+        "accounting impact"
+      ]
+    },
+    {
+      "name": "CARD_MACHINE_ACCOUNTS",
+      "grain": "One row per card machine (terminal).",
+      "description": "Reference table describing each physical card machine the merchant operates: which provider supplied it, its contract dates and rates, whether it is still active, and which bank it settles into.",
+      "row_count": 5,
+      "columns": [
+        {
+          "name": "provider",
+          "type": "VARCHAR",
+          "description": "Acquiring provider that supplied the terminal."
+        },
+        {
+          "name": "merchant_id",
+          "type": "VARCHAR",
+          "description": "Merchant account the terminal is registered under."
+        },
+        {
+          "name": "terminal_id",
+          "type": "VARCHAR",
+          "description": "Primary key, e.g. TERM-RZP-01."
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR",
+          "description": "'ACTIVE' or 'INACTIVE'. One terminal (TERM-PIN-02) is INACTIVE."
+        },
+        {
+          "name": "contract_start",
+          "type": "DATE",
+          "description": "Contract start date."
+        },
+        {
+          "name": "contract_end",
+          "type": "DATE",
+          "description": "Contract end date - useful for finding contracts expiring soon."
+        },
+        {
+          "name": "transaction_fee",
+          "type": "NUMBER",
+          "description": "Headline contracted per-transaction rate as a decimal, e.g. 0.0180 = 1.80%."
+        },
+        {
+          "name": "monthly_fee",
+          "type": "NUMBER",
+          "description": "Fixed monthly rental for the machine."
+        },
+        {
+          "name": "settlement_bank",
+          "type": "VARCHAR",
+          "description": "Bank the terminal settles into."
+        },
+        {
+          "name": "account_manager_contact",
+          "type": "VARCHAR",
+          "description": "Provider-side contact email."
+        }
+      ],
+      "relationships": [
+        "CARD_MACHINE_ACCOUNTS.terminal_id <- TRANSACTIONS.terminal_id",
+        "CARD_MACHINE_ACCOUNTS.terminal_id <- SETTLEMENTS.terminal_id",
+        "CARD_MACHINE_ACCOUNTS.terminal_id <- DISPUTES.terminal_id"
+      ],
+      "common_metrics": [
+        "active terminals = COUNT_IF(status = 'ACTIVE')",
+        "total monthly rental = SUM(monthly_fee) WHERE status = 'ACTIVE'",
+        "contracts expiring within 180 days = COUNT_IF(contract_end < DATEADD('day', 180, CURRENT_DATE()))"
+      ],
+      "example_questions": [
+        "Which terminals are inactive?",
+        "What do we pay in monthly machine rental?",
+        "Which contracts expire in the next six months?"
+      ],
+      "aliases": [
+        "terminals",
+        "card machines",
+        "pos devices",
+        "machines",
+        "devices",
+        "contracts",
+        "contract expiry",
+        "rental",
+        "monthly rental",
+        "active terminals",
+        "inactive terminals",
+        "provider accounts",
+        "merchant accounts"
+      ]
+    },
+    {
+      "name": "FEE_SCHEDULE",
+      "grain": "One row per provider + card network combination.",
+      "description": "Contracted rate card. Defines the per-transaction rate, monthly fee, flat chargeback fee and foreign-exchange surcharge for each provider and card network. Use this to compare providers on price or to check whether transactions were charged correctly.",
+      "row_count": 9,
+      "columns": [
+        {
+          "name": "provider",
+          "type": "VARCHAR",
+          "description": "RAZORPAY, PINELABS or PAYTM."
+        },
+        {
+          "name": "card_type",
+          "type": "VARCHAR",
+          "description": "VISA, MASTERCARD or RUPAY."
+        },
+        {
+          "name": "transaction_fee",
+          "type": "NUMBER",
+          "description": "Per-transaction rate as a decimal, e.g. 0.0195 = 1.95%. RUPAY is materially cheaper than VISA/MASTERCARD everywhere."
+        },
+        {
+          "name": "monthly_fee",
+          "type": "NUMBER",
+          "description": "Fixed monthly fee for the provider."
+        },
+        {
+          "name": "chargeback_fee",
+          "type": "NUMBER",
+          "description": "Flat fee charged per chargeback raised."
+        },
+        {
+          "name": "fx_surcharge",
+          "type": "NUMBER",
+          "description": "Additional rate applied to foreign cards. 0 for RUPAY."
+        }
+      ],
+      "relationships": [
+        "FEE_SCHEDULE.provider + card_type <- TRANSACTIONS.provider + card_type (determines TRANSACTIONS.fee)",
+        "FEE_SCHEDULE.provider + card_type <- DISPUTES.provider + card_type (determines DISPUTES.chargeback_fee)"
+      ],
+      "common_metrics": [
+        "cheapest provider per network = MIN(transaction_fee) GROUP BY card_type",
+        "rate spread = MAX(transaction_fee) - MIN(transaction_fee)",
+        "blended contracted rate = AVG(transaction_fee)"
+      ],
+      "example_questions": [
+        "Which provider charges us the most per transaction?",
+        "Compare RUPAY rates across providers.",
+        "What is the chargeback fee for each provider?"
+      ],
+      "aliases": [
+        "rate card",
+        "fee schedule",
+        "pricing",
+        "rates",
+        "tariff",
+        "cost per transaction",
+        "mdr",
+        "chargeback fee",
+        "fx surcharge",
+        "cheapest provider",
+        "most expensive provider",
+        "contracted rates",
+        "compare providers on price"
+      ]
+    }
+  ]
+}

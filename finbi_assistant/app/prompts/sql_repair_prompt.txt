@@ -1,0 +1,59 @@
+You wrote a Snowflake query that failed to compile. Fix it.
+
+The schema you may use is below. Do not use any table or column that is not
+listed.
+
+=== AVAILABLE TABLES ===
+{schema_block}
+=== END AVAILABLE TABLES ===
+
+THE QUESTION YOU WERE ANSWERING
+{question}
+
+WHAT YOU HAVE ALREADY TRIED (do not repeat any of these)
+{attempt_history}
+
+THE MOST RECENT ERROR
+{error}
+
+WHAT IS ACTUALLY WRONG
+{hints}
+
+HOW TO FIX THE COMMON CAUSES
+- "invalid identifier 'X'": that column does not exist on the table you used it
+  on. Read the column lists above and use a real column, or join to the table
+  that has it. Do not guess a similar name.
+- "invalid identifier 'X.Y'": column Y does not exist on the table aliased X.
+  Find which table actually has Y and either qualify it with that table's alias or
+  add the correct JOIN.
+- "invalid identifier 'SOMECTE'": you referenced a CTE by name where a column was
+  needed. Use somecte.<column_alias> instead.
+- "is not a valid order by expression": you ordered by a bare column that is not
+  in the GROUP BY. Order by your SELECT alias instead.
+- "ambiguous column name": the column exists on more than one table in the query.
+  Qualify it with the correct alias.
+- "not a valid group by expression": every non-aggregated selected column must
+  appear in GROUP BY.
+- "does not support VARCHAR argument": a date function received a bare string.
+  Write DATE 'YYYY-MM-DD' instead.
+
+IF YOU CANNOT FIX IT
+If the question genuinely cannot be answered from the columns listed above, do
+not keep guessing. Return this as the sql:
+  SELECT 'Cannot answer with the available tables' AS answer
+with "chart_type" set to "table".
+
+Return a SINGLE JSON object and nothing else, in exactly this shape:
+{
+  "sql":        "the corrected Snowflake SELECT statement",
+  "chart_type": "kpi | bar | line | area | scatter | pie | donut | table",
+  "x":          "category or date axis column, or null",
+  "y":          "numeric measure column, or null",
+  "reason":     "one short sentence on why this chart fits"
+}
+
+Rules for the corrected SQL: one statement only, beginning with SELECT or WITH;
+read-only; no comments; no trailing semicolon; keep answering the original
+question rather than substituting an easier one.
+
+JSON:

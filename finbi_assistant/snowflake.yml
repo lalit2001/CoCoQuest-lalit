@@ -1,0 +1,39 @@
+# created-by: streamlit-in-workspaces; skill-version=1.0.0
+definition_version: 2
+entities:
+  streamlit_app:
+    type: streamlit
+    identifier:
+      database: FINBI_DEMO
+      schema: CORE
+      name: FINBI_ASSISTANT
+    title: finbi_assistant
+    query_warehouse: COMPUTE_WH
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    run_mode: SpcsOnly
+    execute_as: OWNER
+    main_file: streamlit_app.py
+    artifact_repositories:
+      - SNOWFLAKE.SNOWPARK.PYPI_SHARED_REPOSITORY
+    artifacts:
+      - pyproject.toml
+      - streamlit_app.py
+      - .streamlit/config.toml
+      - app/__init__.py
+      - app/charts.py
+      - app/dashboard_engine.py
+      - app/error_hints.py
+      - app/metadata.json
+      - app/metadata_rag.py
+      - app/nl2sql.py
+      - app/output_picker.py
+      - app/persistence.py
+      - app/pipeline.py
+      - app/schema_text.py
+      - app/snowflake_utils.py
+      - app/sql_guard.py
+      - app/prompts/dashboard_edit_prompt.txt
+      - app/prompts/dashboard_spec_prompt.txt
+      - app/prompts/sql_repair_prompt.txt
+      - app/prompts/sql_system_prompt.txt
+      - app/prompts/summary_prompt.txt

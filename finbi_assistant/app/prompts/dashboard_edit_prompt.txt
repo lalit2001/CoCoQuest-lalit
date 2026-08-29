@@ -1,0 +1,61 @@
+You are editing an existing analytics dashboard, expressed as JSON.
+
+Return the COMPLETE updated dashboard as a SINGLE JSON object and nothing else.
+No prose, no markdown fences, no diff or patch - the full spec every time.
+Returning the whole spec rather than a delta is deliberate: at this size it is far
+more reliable, and it lets the app swap one object in and re-render.
+
+DATABASE: FINBI_DEMO   SCHEMA: CORE
+Today is {today}. The data covers {date_range}.
+
+=== AVAILABLE TABLES ===
+{schema_block}
+=== END AVAILABLE TABLES ===
+
+THE CURRENT DASHBOARD
+{current_spec}
+
+EDITING RULES
+1. Change only what the instruction asks for. Keep every other widget byte-for-byte
+   as it is, including its id, title, type, sql, x and y.
+2. Keep existing ids stable. Give new widgets fresh unique lower_snake_case ids
+   that do not collide with existing ones.
+3. Preserve the JSON shape: title, layout, filters, widgets.
+4. To remove something, delete that widget from the array rather than blanking it.
+5. To split or group by a new dimension, rewrite the affected widgets' SQL to add
+   that dimension - and change the widget "type" if the new shape needs it (a kpi
+   becomes a bar once it is grouped, and "x" must then be set).
+6. If the instruction is unclear, make the smallest sensible change.
+7. Update "title" only if the dashboard's subject genuinely changed.
+
+ALL THE ORIGINAL CONSTRAINTS STILL APPLY
+8. layout is "grid-1col", "grid-2col" or "grid-3col".
+9. Widget type is one of: kpi, bar, line, scatter, pie, donut, area, table.
+   "pie" and "donut" both render a donut chart. "area" renders a filled area chart.
+10. Each widget's sql is ONE read-only statement starting with SELECT or WITH, no
+    comments, no trailing semicolon, using only the tables and columns above.
+11. "x" and "y" are aliases from that widget's own SELECT list. kpi has x null and
+    y set; table has both null.
+12. Every filter has a "column" written as "TABLE.column" naming a real table and
+    column. Never add an "options" array or default dates - the app reads the
+    control's options and date bounds from that column.
+13. Reference filters only by placeholder:
+      {<id>.start} / {<id>.end}  date_range, already typed DATE literals:
+                                 BETWEEN {date_range.start} AND {date_range.end}
+      {<id>}                     select, ONE quoted literal: provider = {provider}
+      {<id>}                     multiselect, an ALREADY PARENTHESISED list:
+                                 provider IN {providers}
+    Never wrap a placeholder in quotes or add brackets around a multiselect.
+14. Every declared filter must be used by at least one widget, and every
+    placeholder must match a declared filter id.
+15. Alias output columns in snake_case. Guard division with NULLIF(denom, 0).
+16. ORDER BY only an alias from the SELECT list or an expression in GROUP BY.
+17. When joining, alias each table and qualify every column with the alias of the
+    table it truly belongs to.
+18. LEDGER.running_balance is per-account, so a balance widget must filter to one
+    account_code.
+
+INSTRUCTION
+{instruction}
+
+JSON:

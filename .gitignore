@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local Streamlit secrets - the deployed app uses Snowflake's embedded identity,
+# so this file only ever exists for local development and must never be committed.
+.streamlit/secrets.toml
+.env
+.env.*
+
+# Contains a live GitHub personal access token. Kept out of the repository.
+Untitled.sql
+
+# OS noise
+.DS_Store
