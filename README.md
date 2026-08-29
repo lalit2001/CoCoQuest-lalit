@@ -10,6 +10,14 @@ Everything runs inside Snowflake. SQL is written by Cortex, schema retrieval use
 Cortex embeddings stored in a Snowflake table, and the app is Streamlit in Snowflake
 using the workspace's embedded identity. No data and no prompts leave the account.
 
+## Demo Video
+
+https://github.com/user-attachments/assets/demo_video.mp4
+
+> **[Watch the demo](demo_video.mp4)** — a walkthrough showing the Ask tab,
+> dashboard builder, magic AI popover, chart switching, and the iterative repair loop
+> in action.
+
 ---
 
 ## Architecture
