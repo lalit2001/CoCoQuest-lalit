@@ -12,7 +12,7 @@ using the workspace's embedded identity. No data and no prompts leave the accoun
 
 ## Demo Video
 
-https://github.com/lalit2001/CoCoQuest-lalit/raw/main/demo_video.mp4
+[![Watch the demo](https://img.youtube.com/vi/Haq7FjYoX80/maxresdefault.jpg)](https://youtu.be/Haq7FjYoX80)
 
 ---
 
