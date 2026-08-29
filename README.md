@@ -12,11 +12,80 @@ using the workspace's embedded identity. No data and no prompts leave the accoun
 
 ## Demo Video
 
-https://github.com/user-attachments/assets/demo_video.mp4
+<video src="demo_video.mp4" controls width="100%"></video>
 
-> **[Watch the demo](demo_video.mp4)** — a walkthrough showing the Ask tab,
-> dashboard builder, magic AI popover, chart switching, and the iterative repair loop
-> in action.
+---
+
+## Features
+
+### Natural Language to SQL
+- Ask questions in plain English — the app writes, validates, and runs Snowflake SQL
+- Schema-aware RAG retrieval picks the right tables using vector similarity
+- Smart answer detection: simple text questions get a clean text response, analytical questions get charts
+- One-sentence summary of every result powered by Cortex LLM
+
+### Iterative Self-Repair (Agent Loop)
+- Failed queries are automatically retried up to 4 times
+- Each retry includes schema-aware error diagnosis: which column is on which table, near-miss suggestions, cross-table join patterns
+- Full attempt history is visible in "How this was answered"
+
+### Production-Quality Charts (Altair)
+- **7 chart types**: bar, line, area, donut/pie, scatter, KPI metrics, table
+- Vibrant multi-color palette, rounded corners, spline interpolation, gradient fills
+- Donut charts with center total annotation and outside labels
+- Zero external dependencies — Altair is built into the Streamlit runtime
+
+### Magic AI Popover
+- Every chart, table, and KPI has a sparkle icon at the top-right corner
+- Click it to open a popover with:
+  - **Summarise** — AI-generated 2-3 bullet point data summary (shown inside the popover)
+  - **Switch chart type** — instantly re-render as bar, line, area, donut, scatter, or table
+  - **Download CSV** — export the underlying data
+  - **Ask about this data** — free-text question answered by the LLM in context
+- Chart type switches persist across reruns and auto-detect x/y axes
+
+### One-Prompt Dashboard Builder
+- Describe a dashboard in one sentence → get 5-6 widgets (KPIs + charts) with filters
+- Conversational editing: "split by provider", "add a KPI for pending payouts"
+- Every dashboard includes at least one line chart and one donut for visual variety
+- Interactive filters (date range, select, multiselect) with typed SQL substitution
+- Widget rearrangement (drag up/down)
+- JSON spec viewer with full prompt history
+
+### Dashboard Persistence & Gallery
+- Save dashboards to Snowflake (`FINBI_DEMO.CORE.DASHBOARDS` table)
+- Saved dashboards appear as colored cards in the gallery
+- Open, edit, save changes, or save as new copy
+- Delete dashboards you no longer need
+- "Back to dashboards" button to return to gallery from any active dashboard
+
+### Chat Persistence & History
+- Every conversation turn is saved to `FINBI_DEMO.CORE.CHAT_MESSAGES`
+- SQL is stored (not result sets) — re-running shows current data
+- History tab with conversation summaries, outcome counts (answered/refused/failed)
+- Re-run any stored query against live data
+- Delete all history option
+
+### Dark Theme Sidebar UI
+- Dark mode with `#0E1117` background and vibrant purple accents
+- Sidebar navigation: **+ New chat**, **Dashboards**, **History**
+- Recent conversations listed in sidebar
+- Animated transitions (fade-in, slide-in)
+- Responsive card layouts for KPIs, charts, and dashboard gallery
+
+### Safety & Read-Only Guard
+- Two-layer defence: prompt-level sentinel + SQL guard (`sql_guard.py`)
+- Only `SELECT`/`WITH` allowed — no writes, DDL, comments, or stacked statements
+- String literal blanking prevents injection via quoted text
+- Dashboard filter values are typed literals, never string-concatenated
+- False-positive refusal detection: read-only questions auto-retry with clarification
+- 36 test cases (12 legit, 24 hostile)
+
+### Smart Answer Rendering
+- Simple text answers (e.g. "do I have ledger?") → clean text, no chart
+- Analytical results → auto-chosen chart with AI summary
+- KPI metrics with smart formatting (1.2K, 3.4M)
+- Case-insensitive column resolution at every layer
 
 ---
 
@@ -111,8 +180,8 @@ re-embeds if the table is stale, so a forgotten regeneration cannot leave stale 
 ### Dependencies
 
 `pyproject.toml` is the **unmodified** Workspace default, so no external access
-integration is required. Plotly is imported optionally — with it you get styled figures
-and donut charts, without it every visual falls back to a native Streamlit chart.
+integration is required. All charts use Altair, which is built into the Streamlit
+runtime — no extra packages needed.
 
 ---
 
