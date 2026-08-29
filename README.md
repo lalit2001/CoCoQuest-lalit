@@ -12,7 +12,9 @@ using the workspace's embedded identity. No data and no prompts leave the accoun
 
 ## Demo Video
 
-[![Watch the demo](https://img.youtube.com/vi/Haq7FjYoX80/maxresdefault.jpg)](https://youtu.be/Haq7FjYoX80)
+[<img src="https://img.youtube.com/vi/Haq7FjYoX80/maxresdefault.jpg" width="100%" alt="Watch the demo">](https://youtu.be/Haq7FjYoX80)
+
+> Click the image above to watch the demo on YouTube.
 
 ---
 
